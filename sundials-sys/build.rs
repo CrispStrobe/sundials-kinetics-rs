@@ -23,17 +23,30 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
     // Link all Sundials libraries we need (statically)
+    // Core
+    println!("cargo:rustc-link-lib=static=sundials_core");
+    // Solvers (sensitivity-capable variants)
     println!("cargo:rustc-link-lib=static=sundials_cvodes");
     println!("cargo:rustc-link-lib=static=sundials_idas");
     println!("cargo:rustc-link-lib=static=sundials_kinsol");
+    println!("cargo:rustc-link-lib=static=sundials_arkode");
+    // NVector
     println!("cargo:rustc-link-lib=static=sundials_nvecserial");
-    println!("cargo:rustc-link-lib=static=sundials_sunlinsoldense");
+    // Matrices
     println!("cargo:rustc-link-lib=static=sundials_sunmatrixdense");
-    println!("cargo:rustc-link-lib=static=sundials_sunlinsolklu");
+    println!("cargo:rustc-link-lib=static=sundials_sunmatrixband");
     println!("cargo:rustc-link-lib=static=sundials_sunmatrixsparse");
+    // Direct linear solvers
+    println!("cargo:rustc-link-lib=static=sundials_sunlinsoldense");
+    println!("cargo:rustc-link-lib=static=sundials_sunlinsolband");
+    println!("cargo:rustc-link-lib=static=sundials_sunlinsolklu");
+    // Iterative linear solvers
+    println!("cargo:rustc-link-lib=static=sundials_sunlinsolspgmr");
+    println!("cargo:rustc-link-lib=static=sundials_sunlinsolspbcgs");
+    println!("cargo:rustc-link-lib=static=sundials_sunlinsolsptfqmr");
+    // Nonlinear solvers
     println!("cargo:rustc-link-lib=static=sundials_sunnonlinsolnewton");
     println!("cargo:rustc-link-lib=static=sundials_sunnonlinsolfixedpoint");
-    println!("cargo:rustc-link-lib=static=sundials_core");
 
     // We also need SuiteSparse
     println!("cargo:rustc-link-search=native=/usr/lib/x86_64-linux-gnu");

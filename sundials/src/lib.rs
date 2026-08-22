@@ -10,10 +10,13 @@ pub mod sparse;
 
 pub use arkode::{ArkodeBuilder, ArkodeSolver};
 pub use context::Context;
-pub use cvode::{CvodeBuilder, CvodeSolver, Lmm};
-pub use ida::{IdaBuilder, IdaSolver};
+pub use cvode::{AdjInterp, CvodeBuilder, CvodeSolver, Lmm, SensMethod};
+pub use ida::{IdaAdjInterp, IdaBuilder, IdaSensMethod, IdaSolver};
 pub use kinsol::{KinsolBuilder, KinsolSolver};
-pub use linsol::DenseLinearSolver;
-pub use matrix::DenseMatrix;
+pub use linsol::{
+    BandLinearSolver, DenseLinearSolver, IterativeSolver, LinearSolver, PrecType, SpbcgsSolver,
+    SpgmrSolver, SptfqmrSolver, SunMatrix,
+};
+pub use matrix::{BandMatrix, DenseMatrix};
 pub use nvector::NVector;
 pub use sparse::{SparseLinearSolver, SparseMatrix, SparseType};
