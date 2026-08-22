@@ -37,14 +37,17 @@ Before expanding the chemistry engine, we need to expose the full power of Sundi
 - [x] Robust cross-platform compilation targets (WASM, iOS) via CMake configurations in `build.rs`.
 
 ### Phase 2: C-API and FFI
-- [ ] Write an `extern "C"` wrapper over the kinetics engine.
+- [x] Write an `extern "C"` wrapper over the kinetics engine (type-erased vtable dispatch for generic CVODE solver).
+- [x] Add solver statistics FFI (`chem_evaluator_get_num_steps`, `chem_evaluator_get_num_rhs_evals`).
 - [ ] Expose to Python and Dart (Flutter) environments, eliminating Python/C++ interpreter overhead from numerical integration loops.
 
 ### Phase 3: ChemPy Parity
-- [ ] Full Chemkin `.inp` and Cantera `.cti` / `.yaml` format parsers.
+- [x] Cantera `.yaml` mechanism parser with species, NASA-7 thermodynamics, elementary/three-body/falloff reactions.
+- [x] Chemkin-like `.inp` parser (simplified format).
+- [x] NASA-7 polynomial evaluation (cp/R, h/RT, s/R, g/RT).
 - [ ] Automatic analytical Jacobian generation via SymEngine bridging.
-- [ ] Support for complex pressure-dependent reactions, third-body efficiencies, and falloff curves.
-- [ ] Seamless integration with thermodynamic databases (e.g. NASA polynomials).
+- [ ] Runtime pressure-dependent rate evaluation (Troe parameters parsed but not yet applied).
+- [ ] Full Cantera `.cti` format support.
 
 ## License
 
