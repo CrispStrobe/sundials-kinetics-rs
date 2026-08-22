@@ -1,6 +1,7 @@
 pub mod evaluator;
 pub mod symengine_generator;
 pub mod parser;
+pub mod ffi;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Phase {

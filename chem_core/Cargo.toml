@@ -3,6 +3,9 @@ name = "chem_core"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 sundials = { path = "../sundials" }
 symengine = { path = "../symengine" }
