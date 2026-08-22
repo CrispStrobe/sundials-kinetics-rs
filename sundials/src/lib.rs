@@ -1,3 +1,4 @@
+pub mod arkode;
 pub mod context;
 pub mod cvode;
 pub mod ida;
@@ -7,6 +8,7 @@ pub mod matrix;
 pub mod nvector;
 pub mod sparse;
 
+pub use arkode::{ArkodeBuilder, ArkodeSolver};
 pub use context::Context;
 pub use cvode::{CvodeBuilder, CvodeSolver, Lmm};
 pub use ida::{IdaBuilder, IdaSolver};
