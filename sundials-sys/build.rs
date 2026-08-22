@@ -25,11 +25,15 @@ fn main() {
     // Link all Sundials libraries we need (statically)
     println!("cargo:rustc-link-lib=static=sundials_cvode");
     println!("cargo:rustc-link-lib=static=sundials_ida");
+    println!("cargo:rustc-link-lib=static=sundials_kinsol");
     println!("cargo:rustc-link-lib=static=sundials_nvecserial");
     println!("cargo:rustc-link-lib=static=sundials_sunlinsoldense");
     println!("cargo:rustc-link-lib=static=sundials_sunmatrixdense");
     println!("cargo:rustc-link-lib=static=sundials_sunlinsolklu");
     println!("cargo:rustc-link-lib=static=sundials_sunmatrixsparse");
+    println!("cargo:rustc-link-lib=static=sundials_sunnonlinsolnewton");
+    println!("cargo:rustc-link-lib=static=sundials_sunnonlinsolfixedpoint");
+    println!("cargo:rustc-link-lib=static=sundials_core");
 
     // We also need SuiteSparse
     println!("cargo:rustc-link-search=native=/usr/lib/x86_64-linux-gnu");

@@ -225,4 +225,31 @@ mod tests {
         assert!((out[1] - 0.0000338).abs() < 1e-5, "y2 was {}", out[1]);
         assert!((out[2] - 0.0147949).abs() < 1e-4, "y3 was {}", out[2]);
     }
+
+    #[test]
+    fn test_adams_simple() {
+        // This is the direct equivalent of the rust-sundials README example:
+        // dy/dt = 1, y(0) = 0. Solving at t=2 should yield y=2.
+        let ctx = Context::new();
+        let mut y = NVector::new_serial(1, &ctx);
+        y.as_mut_slice()[0] = 0.0;
+
+        let mut solver = CvodeSolver::new(Lmm::Adams, &ctx);
+        solver.init(0.0, &y, |_t, _u, du| {
+            du[0] = 1.0;
+            Ok(())
+        });
+
+        // We use explicit dense solver hooks rather than magical default inference
+        solver.set_ss_tolerances(1e-4, 1e-8);
+        let mat = DenseMatrix::new(1, 1, &ctx);
+        let linsol = DenseLinearSolver::new(&y, &mat, &ctx);
+        solver.set_linear_solver(&linsol, &mat);
+
+        let mut tret = 0.0;
+        solver.step(2.0, &mut y, &mut tret);
+
+        // Verify the exact mathematical result
+        assert!((y.as_slice()[0] - 2.0).abs() < 1e-4);
+    }
 }
