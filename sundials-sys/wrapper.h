@@ -4,7 +4,9 @@
 #include <sunmatrix/sunmatrix_dense.h>
 #include <sunlinsol/sunlinsol_dense.h>
 #include <cvode/cvode.h>
+#include <cvodes/cvodes.h>
 #include <ida/ida.h>
+#include <idas/idas.h>
 #include <kinsol/kinsol.h>
 #include <sunmatrix/sunmatrix_sparse.h>
 #include <sunlinsol/sunlinsol_klu.h>

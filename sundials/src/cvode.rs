@@ -1,7 +1,9 @@
 use sundials_sys::{
     CVodeCreate, CVodeInit, CVodeSStolerances, CVode, CVodeFree,
     CVodeSetLinearSolver, CV_ADAMS, CV_BDF,
-    N_Vector, sunrealtype, CV_SUCCESS
+    N_Vector, sunrealtype, CV_SUCCESS,
+    CVodeSensInit, CVodeSensEEtolerances, CVodeGetSens, CVodeSetSensParams,
+    CV_STAGGERED, CV_SIMULTANEOUS
 };
 use crate::context::Context;
 use crate::nvector::NVector;
@@ -16,12 +18,20 @@ pub enum Lmm {
     Bdf = CV_BDF as isize,
 }
 
+pub enum SensMethod {
+    Simultaneous = CV_SIMULTANEOUS as isize,
+    Staggered = CV_STAGGERED as isize,
+}
+
+struct UserData<'a> {
+    rhs: Box<dyn FnMut(f64, &[f64], &mut [f64]) -> Result<(), ()> + 'a>,
+    sens_rhs: Option<Box<dyn FnMut(f64, &[f64], &[f64], &mut [&mut [f64]]) -> Result<(), ()> + 'a>>,
+}
+
 pub struct CvodeSolver<'a> {
     inner: *mut c_void,
-    // Keep reference to context so it isn't dropped
     _ctx: &'a Context,
-    // Store user closure
-    rhs: Box<dyn FnMut(f64, &[f64], &mut [f64]) -> Result<(), ()> + 'a>,
+    user_data: *mut c_void,
 }
 
 extern "C" fn rhs_trampoline(
@@ -30,19 +40,60 @@ extern "C" fn rhs_trampoline(
     ydot: N_Vector,
     user_data: *mut c_void,
 ) -> i32 {
-    let closure: &mut Box<dyn FnMut(f64, &[f64], &mut [f64]) -> Result<(), ()>> =
-        unsafe { &mut *(user_data as *mut _) };
+    let ud: &mut UserData = unsafe { &mut *(user_data as *mut _) };
 
     let len = unsafe { sundials_sys::N_VGetLength_Serial(y) } as usize;
     let y_slice = unsafe { std::slice::from_raw_parts(sundials_sys::N_VGetArrayPointer_Serial(y), len) };
     let ydot_slice = unsafe { std::slice::from_raw_parts_mut(sundials_sys::N_VGetArrayPointer_Serial(ydot), len) };
 
-    let result = catch_unwind(AssertUnwindSafe(|| closure(t, y_slice, ydot_slice)));
+    let result = catch_unwind(AssertUnwindSafe(|| (ud.rhs)(t, y_slice, ydot_slice)));
     
     match result {
         Ok(Ok(())) => 0, // success
         Ok(Err(())) => 1, // recoverable error
         Err(_) => -1, // unrecoverable error (panic)
+    }
+}
+
+extern "C" fn sens_rhs_trampoline(
+    ns: i32,
+    t: sunrealtype,
+    y: N_Vector,
+    ydot: N_Vector,
+    ys_1d: *mut N_Vector,
+    ysdot_1d: *mut N_Vector,
+    user_data: *mut c_void,
+    _tmp1: N_Vector,
+    _tmp2: N_Vector,
+) -> i32 {
+    let ud: &mut UserData = unsafe { &mut *(user_data as *mut _) };
+    
+    if let Some(ref mut sens_closure) = ud.sens_rhs {
+        let len = unsafe { sundials_sys::N_VGetLength_Serial(y) } as usize;
+        let y_slice = unsafe { std::slice::from_raw_parts(sundials_sys::N_VGetArrayPointer_Serial(y), len) };
+        let ydot_slice = unsafe { std::slice::from_raw_parts(sundials_sys::N_VGetArrayPointer_Serial(ydot), len) };
+        
+        let mut ysdot_slices = Vec::with_capacity(ns as usize);
+        unsafe {
+            let ys_array = std::slice::from_raw_parts(ysdot_1d, ns as usize);
+            for i in 0..ns as usize {
+                ysdot_slices.push(std::slice::from_raw_parts_mut(
+                    sundials_sys::N_VGetArrayPointer_Serial(ys_array[i]), len
+                ));
+            }
+        }
+        
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            sens_closure(t, y_slice, ydot_slice, &mut ysdot_slices)
+        }));
+        
+        match result {
+            Ok(Ok(())) => 0,
+            Ok(Err(())) => 1,
+            Err(_) => -1,
+        }
+    } else {
+        -1 // Should not be called if None
     }
 }
 
@@ -55,7 +106,7 @@ impl<'a> CvodeSolver<'a> {
         Self {
             inner,
             _ctx: ctx,
-            rhs: Box::new(|_, _, _| Ok(())),
+            user_data: ptr::null_mut(),
         }
     }
 
@@ -63,13 +114,62 @@ impl<'a> CvodeSolver<'a> {
     where
         F: FnMut(f64, &[f64], &mut [f64]) -> Result<(), ()> + 'a,
     {
-        self.rhs = Box::new(rhs);
-        let user_data_ptr = &mut self.rhs as *mut _ as *mut c_void;
+        let ud = Box::new(UserData {
+            rhs: Box::new(rhs),
+            sens_rhs: None,
+        });
+        self.user_data = Box::into_raw(ud) as *mut c_void;
         
         unsafe {
-            sundials_sys::CVodeSetUserData(self.inner, user_data_ptr);
+            sundials_sys::CVodeSetUserData(self.inner, self.user_data);
             let flag = CVodeInit(self.inner, Some(rhs_trampoline), t0, y0.as_raw());
             assert_eq!(flag, CV_SUCCESS as i32);
+        }
+    }
+
+    pub fn init_sensitivities<F>(&mut self, method: SensMethod, y_s0: &[NVector], mut sens_rhs: Option<F>)
+    where
+        F: FnMut(f64, &[f64], &[f64], &mut [&mut [f64]]) -> Result<(), ()> + 'a,
+    {
+        // Update user data with new closure if provided
+        if let Some(sens_closure) = sens_rhs {
+            let ud: &mut UserData = unsafe { &mut *(self.user_data as *mut _) };
+            ud.sens_rhs = Some(Box::new(sens_closure));
+        }
+
+        let ns = y_s0.len() as i32;
+        // Build array of raw N_Vector pointers
+        let mut raw_ys0: Vec<N_Vector> = y_s0.iter().map(|v| v.as_raw()).collect();
+
+        unsafe {
+            let cb = if unsafe { (*(self.user_data as *mut UserData)).sens_rhs.is_some() } {
+                Some(sens_rhs_trampoline as _)
+            } else {
+                None
+            };
+            
+            let flag = CVodeSensInit(self.inner, ns, method as i32, cb, raw_ys0.as_mut_ptr());
+            assert_eq!(flag, CV_SUCCESS as i32, "CVodeSensInit failed");
+            
+            let flag = CVodeSensEEtolerances(self.inner);
+            assert_eq!(flag, CV_SUCCESS as i32, "CVodeSensEEtolerances failed");
+        }
+    }
+
+    pub fn set_sens_params(&mut self, p: &mut [f64], pbar: Option<&mut [f64]>, plist: Option<&mut [i32]>) {
+        unsafe {
+            let pbar_ptr = pbar.map_or(ptr::null_mut(), |s| s.as_mut_ptr());
+            let plist_ptr = plist.map_or(ptr::null_mut(), |s| s.as_mut_ptr());
+            
+            let flag = CVodeSetSensParams(self.inner, p.as_mut_ptr(), pbar_ptr, plist_ptr);
+            assert_eq!(flag, CV_SUCCESS as i32, "CVodeSetSensParams failed");
+        }
+    }
+
+    pub fn get_sens(&self, tret: &mut f64, y_s: &mut [NVector]) -> i32 {
+        let mut raw_ys: Vec<N_Vector> = y_s.iter_mut().map(|v| v.as_raw()).collect();
+        unsafe {
+            sundials_sys::CVodeGetSens(self.inner, tret, raw_ys.as_mut_ptr())
         }
     }
 
@@ -138,6 +238,9 @@ impl<'a> Drop for CvodeSolver<'a> {
     fn drop(&mut self) {
         unsafe {
             CVodeFree(&mut self.inner);
+            if !self.user_data.is_null() {
+                let _ = Box::from_raw(self.user_data as *mut UserData);
+            }
         }
     }
 }

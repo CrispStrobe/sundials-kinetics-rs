@@ -23,8 +23,8 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
     // Link all Sundials libraries we need (statically)
-    println!("cargo:rustc-link-lib=static=sundials_cvode");
-    println!("cargo:rustc-link-lib=static=sundials_ida");
+    println!("cargo:rustc-link-lib=static=sundials_cvodes");
+    println!("cargo:rustc-link-lib=static=sundials_idas");
     println!("cargo:rustc-link-lib=static=sundials_kinsol");
     println!("cargo:rustc-link-lib=static=sundials_nvecserial");
     println!("cargo:rustc-link-lib=static=sundials_sunlinsoldense");
