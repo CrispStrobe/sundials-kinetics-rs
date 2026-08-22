@@ -8,10 +8,13 @@ While the ultimate, long-term goal of this project is to achieve feature parity 
 
 At present, this workspace contains:
 1. **`sundials-sys` & `sundials`**:
-   - Zero-cost Rust FFI bindings to Sundials CVODE and IDA.
-   - Safe Rust wrappers for `SUNContext`, `NVector`, `DenseMatrix`, and `SparseMatrix` (CSC/CSR).
-   - Linear solver wrappers for `DenseLinearSolver` and the `SuiteSparse KLU` direct sparse solver (`SUNLinSol_KLU`).
-   - A highly optimized C-trampoline that allows passing pure Rust closures (with zero-cost panic-unwind protection) directly to the CVODE right-hand-side evaluator.
+   - Zero-cost Rust FFI bindings to Sundials 7.x (CVODE, IDA, ARKode, KINSOL).
+   - Safe Rust wrappers for `SUNContext`, `NVector`, `DenseMatrix`, `BandMatrix`, and `SparseMatrix` (CSC/CSR).
+   - Linear solver wrappers: `DenseLinearSolver`, `BandLinearSolver`, `SparseLinearSolver` (KLU), and iterative solvers (`SpgmrSolver`, `SpbcgsSolver`, `SptfqmrSolver`).
+   - Preconditioner setup/solve callbacks for CVODE, IDA, and ARKode via boxed closures with `catch_unwind` safety.
+   - Forward sensitivity analysis (CVODES) and adjoint sensitivity analysis (CVODES/IDAS).
+   - Cross-platform build support: feature-gated KLU, CMake toolchain files for WASM and iOS.
+   - A highly optimized C-trampoline that allows passing pure Rust closures (with zero-cost panic-unwind protection) directly to the solver right-hand-side evaluator.
 2. **`symengine-sys` & `symengine`**:
    - Native Rust bindings to the SymEngine C++ library.
    - Safe AST construction and analytical differentiation for building symbolic rate laws and Jacobians.
@@ -27,11 +30,11 @@ At present, this workspace contains:
 Before expanding the chemistry engine, we need to expose the full power of Sundials to Rust:
 - [x] CVODE and IDA core wrappers
 - [x] Dense and Sparse (KLU) Linear Solvers
-- [ ] Add support for Iterative Solvers (SPGMR, SPBCGS, SPTFQMR)
-- [ ] Add support for Preconditioner Setup and Solve callbacks
-- [ ] Implement `SUNMatrix_Band` and Banded Linear Solvers
-- [ ] Expose Sundials sensitivities and adjoint sensitivity analysis (CVODES/IDAS)
-- [ ] Robust cross-platform compilation targets (WASM, iOS) via CMake configurations in `build.rs`.
+- [x] Add support for Iterative Solvers (SPGMR, SPBCGS, SPTFQMR)
+- [x] Add support for Preconditioner Setup and Solve callbacks
+- [x] Implement `SUNMatrix_Band` and Banded Linear Solvers
+- [x] Expose Sundials sensitivities and adjoint sensitivity analysis (CVODES/IDAS)
+- [x] Robust cross-platform compilation targets (WASM, iOS) via CMake configurations in `build.rs`.
 
 ### Phase 2: C-API and FFI
 - [ ] Write an `extern "C"` wrapper over the kinetics engine.
