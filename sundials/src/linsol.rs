@@ -209,6 +209,7 @@ impl LinearSolver for SptfqmrSolver {
         self.inner
     }
 }
+#[cfg(feature = "klu")]
 impl LinearSolver for crate::sparse::SparseLinearSolver {
     fn as_raw(&self) -> SUNLinearSolver {
         crate::sparse::SparseLinearSolver::as_raw(self)

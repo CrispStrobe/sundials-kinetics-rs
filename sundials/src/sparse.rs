@@ -1,7 +1,6 @@
 use crate::{context::Context, nvector::NVector};
 use sundials_sys::{
-    SUNLinSolFree, SUNLinSol_KLU, SUNLinearSolver, SUNMatDestroy, SUNMatrix, SUNSparseMatrix,
-    CSC_MAT, CSR_MAT,
+    SUNMatDestroy, SUNMatrix, SUNSparseMatrix, CSC_MAT, CSR_MAT,
 };
 
 #[derive(Clone, Copy)]
@@ -61,28 +60,31 @@ impl Drop for SparseMatrix {
     }
 }
 
+#[cfg(feature = "klu")]
 pub struct SparseLinearSolver {
-    inner: SUNLinearSolver,
+    inner: sundials_sys::SUNLinearSolver,
 }
 
+#[cfg(feature = "klu")]
 impl SparseLinearSolver {
     pub fn new(y: &NVector, mat: &SparseMatrix, ctx: &Context) -> Self {
-        let inner = unsafe { SUNLinSol_KLU(y.as_raw(), mat.as_raw(), ctx.as_raw()) };
+        let inner = unsafe { sundials_sys::SUNLinSol_KLU(y.as_raw(), mat.as_raw(), ctx.as_raw()) };
         if inner.is_null() {
             panic!("Failed to allocate SUNLinSol_KLU");
         }
         Self { inner }
     }
 
-    pub fn as_raw(&self) -> SUNLinearSolver {
+    pub fn as_raw(&self) -> sundials_sys::SUNLinearSolver {
         self.inner
     }
 }
 
+#[cfg(feature = "klu")]
 impl Drop for SparseLinearSolver {
     fn drop(&mut self) {
         unsafe {
-            SUNLinSolFree(self.inner);
+            sundials_sys::SUNLinSolFree(self.inner);
         }
     }
 }

@@ -19,4 +19,6 @@ pub use linsol::{
 };
 pub use matrix::{BandMatrix, DenseMatrix};
 pub use nvector::NVector;
-pub use sparse::{SparseLinearSolver, SparseMatrix, SparseType};
+pub use sparse::{SparseMatrix, SparseType};
+#[cfg(feature = "klu")]
+pub use sparse::SparseLinearSolver;

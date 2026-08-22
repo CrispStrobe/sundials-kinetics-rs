@@ -342,6 +342,7 @@ impl<'a, F, G> CvodeSolver<'a, F, G> {
         }
     }
 
+    #[cfg(feature = "klu")]
     pub fn set_sparse_linear_solver(
         &mut self,
         linsol: &crate::sparse::SparseLinearSolver,

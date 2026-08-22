@@ -10,7 +10,9 @@
 /* Direct linear solvers */
 #include <sunlinsol/sunlinsol_dense.h>
 #include <sunlinsol/sunlinsol_band.h>
+#ifdef SUNDIALS_KLU_ENABLED
 #include <sunlinsol/sunlinsol_klu.h>
+#endif
 
 /* Iterative linear solvers */
 #include <sunlinsol/sunlinsol_spgmr.h>

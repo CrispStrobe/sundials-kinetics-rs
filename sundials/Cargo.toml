@@ -3,5 +3,9 @@ name = "sundials"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["klu"]
+klu = ["sundials-sys/klu"]
+
 [dependencies]
 sundials-sys = { path = "../sundials-sys" }
