@@ -45,9 +45,11 @@ Before expanding the chemistry engine, we need to expose the full power of Sundi
 - [x] Cantera `.yaml` mechanism parser with species, NASA-7 thermodynamics, elementary/three-body/falloff reactions.
 - [x] Chemkin-like `.inp` parser (simplified format).
 - [x] NASA-7 polynomial evaluation (cp/R, h/RT, s/R, g/RT).
-- [ ] Automatic analytical Jacobian generation via SymEngine bridging.
-- [ ] Runtime pressure-dependent rate evaluation (Troe parameters parsed but not yet applied).
+- [x] Automatic analytical Jacobian generation via SymEngine bridging (MassAction and Arrhenius; pressure-dependent falls back to numerical).
+- [x] Arrhenius temperature-dependent rate evaluation: k(T) = A·T^b·exp(-Ea/RT).
+- [x] Runtime pressure-dependent rate evaluation: third-body [M], Lindemann falloff, Troe broadening factor.
 - [ ] Full Cantera `.cti` format support.
+- [ ] Python and Dart (Flutter) binding generation.
 
 ## License
 
