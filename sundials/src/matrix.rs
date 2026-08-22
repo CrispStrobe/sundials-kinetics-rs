@@ -1,5 +1,5 @@
-use sundials_sys::{SUNMatrix, SUNDenseMatrix, SUNMatDestroy};
 use crate::context::Context;
+use sundials_sys::{SUNDenseMatrix, SUNMatDestroy, SUNMatrix};
 
 pub struct DenseMatrix {
     inner: SUNMatrix,

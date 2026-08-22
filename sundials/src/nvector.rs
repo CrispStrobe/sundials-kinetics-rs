@@ -1,5 +1,5 @@
-use sundials_sys::{N_Vector, N_VNew_Serial, N_VDestroy_Serial, N_VGetArrayPointer_Serial};
 use crate::context::Context;
+use sundials_sys::{N_VDestroy_Serial, N_VGetArrayPointer_Serial, N_VNew_Serial, N_Vector};
 
 /// A wrapper around Sundials N_Vector (Serial for now)
 pub struct NVector {
@@ -56,9 +56,9 @@ mod tests {
     fn test_nvector_creation_and_slices() {
         let ctx = Context::new();
         let mut vec = NVector::new_serial(10, &ctx);
-        
+
         assert_eq!(vec.as_slice().len(), 10);
-        
+
         // Mutate through as_mut_slice
         {
             let slice = vec.as_mut_slice();
@@ -66,7 +66,7 @@ mod tests {
                 slice[i] = i as f64 * 2.0;
             }
         }
-        
+
         // Read through as_slice
         let slice = vec.as_slice();
         for i in 0..10 {

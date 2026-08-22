@@ -1,9 +1,8 @@
-use sundials_sys::{
-    SUNMatrix, SUNSparseMatrix, SUNMatDestroy,
-    SUNLinearSolver, SUNLinSol_KLU, SUNLinSolFree,
-    CSC_MAT, CSR_MAT
-};
 use crate::{context::Context, nvector::NVector};
+use sundials_sys::{
+    SUNLinSolFree, SUNLinSol_KLU, SUNLinearSolver, SUNMatDestroy, SUNMatrix, SUNSparseMatrix,
+    CSC_MAT, CSR_MAT,
+};
 
 #[derive(Clone, Copy)]
 pub enum SparseType {
@@ -20,20 +19,26 @@ pub struct SparseMatrix {
 }
 
 impl SparseMatrix {
-    pub fn new(rows: usize, cols: usize, nnz: usize, sparse_type: SparseType, ctx: &Context) -> Self {
+    pub fn new(
+        rows: usize,
+        cols: usize,
+        nnz: usize,
+        sparse_type: SparseType,
+        ctx: &Context,
+    ) -> Self {
         let inner = unsafe {
             SUNSparseMatrix(
                 rows as i64,
                 cols as i64,
                 nnz as i64,
                 sparse_type as i32,
-                ctx.as_raw()
+                ctx.as_raw(),
             )
         };
         if inner.is_null() {
             panic!("Failed to allocate SUNSparseMatrix");
         }
-        
+
         Self {
             inner,
             rows,
@@ -62,13 +67,7 @@ pub struct SparseLinearSolver {
 
 impl SparseLinearSolver {
     pub fn new(y: &NVector, mat: &SparseMatrix, ctx: &Context) -> Self {
-        let inner = unsafe {
-            SUNLinSol_KLU(
-                y.as_raw(),
-                mat.as_raw(),
-                ctx.as_raw()
-            )
-        };
+        let inner = unsafe { SUNLinSol_KLU(y.as_raw(), mat.as_raw(), ctx.as_raw()) };
         if inner.is_null() {
             panic!("Failed to allocate SUNLinSol_KLU");
         }

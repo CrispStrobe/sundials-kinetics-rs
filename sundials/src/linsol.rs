@@ -1,7 +1,7 @@
-use sundials_sys::{SUNLinearSolver, SUNLinSol_Dense, SUNLinSolFree};
 use crate::context::Context;
-use crate::nvector::NVector;
 use crate::matrix::DenseMatrix;
+use crate::nvector::NVector;
+use sundials_sys::{SUNLinSolFree, SUNLinSol_Dense, SUNLinearSolver};
 
 pub struct DenseLinearSolver {
     inner: SUNLinearSolver,
@@ -34,8 +34,8 @@ impl Drop for DenseLinearSolver {
 mod tests {
     use super::*;
     use crate::context::Context;
-    use crate::nvector::NVector;
     use crate::matrix::DenseMatrix;
+    use crate::nvector::NVector;
 
     #[test]
     fn test_dense_linsol_creation() {
@@ -43,7 +43,7 @@ mod tests {
         let vec = NVector::new_serial(3, &ctx);
         let mat = DenseMatrix::new(3, 3, &ctx);
         let linsol = DenseLinearSolver::new(&vec, &mat, &ctx);
-        
+
         assert!(!linsol.as_raw().is_null());
     }
 }

@@ -1,5 +1,5 @@
-use sundials_sys::{SUNContext, SUNContext_Create, SUNContext_Free};
 use std::ptr;
+use sundials_sys::{SUNContext, SUNContext_Create, SUNContext_Free};
 
 pub struct Context {
     inner: SUNContext,
@@ -36,6 +36,9 @@ mod tests {
     #[test]
     fn test_context_creation() {
         let ctx = Context::new();
-        assert!(!ctx.as_raw().is_null(), "Context pointer should not be null");
+        assert!(
+            !ctx.as_raw().is_null(),
+            "Context pointer should not be null"
+        );
     }
 }
