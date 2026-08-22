@@ -1,7 +1,8 @@
+pub mod cantera;
 pub mod evaluator;
-pub mod symengine_generator;
-pub mod parser;
 pub mod ffi;
+pub mod parser;
+pub mod symengine_generator;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Phase {

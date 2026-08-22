@@ -9,3 +9,5 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 sundials = { path = "../sundials" }
 symengine = { path = "../symengine" }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
