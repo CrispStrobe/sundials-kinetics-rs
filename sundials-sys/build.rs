@@ -1,46 +1,58 @@
 use std::env;
 use std::path::PathBuf;
+use cmake::Config;
 
 fn main() {
-    // Try to find sundials using pkg-config first (useful for local development).
-    // In a fully cross-platform setup, we would fallback to compiling Sundials from source via the `cmake` crate.
-    let library = pkg_config::Config::new()
-        .atleast_version("6.0.0")
-        .probe("sundials_cvode");
+    let dst = Config::new("sundials_src")
+        .define("CMAKE_BUILD_TYPE", "Release")
+        .define("BUILD_SHARED_LIBS", "OFF")
+        .define("BUILD_STATIC_LIBS", "ON")
+        .define("EXAMPLES_ENABLE_C", "OFF")
+        .define("EXAMPLES_INSTALL", "OFF")
+        .define("BUILD_TESTING", "OFF")
+        .define("ENABLE_KLU", "ON")
+        // In Ubuntu, SuiteSparse headers are usually in /usr/include/suitesparse
+        .define("KLU_INCLUDE_DIR", "/usr/include/suitesparse")
+        .define("KLU_LIBRARY_DIR", "/usr/lib/x86_64-linux-gnu")
+        .define("AMD_INCLUDE_DIR", "/usr/include/suitesparse")
+        .define("AMD_LIBRARY_DIR", "/usr/lib/x86_64-linux-gnu")
+        .define("SUNDIALS_INDEX_SIZE", "64") // 64-bit sunindextype
+        .build();
+
+    let lib_dir = dst.join("lib");
+    println!("cargo:rustc-link-search=native={}", lib_dir.display());
+
+    // Link all Sundials libraries we need (statically)
+    println!("cargo:rustc-link-lib=static=sundials_cvode");
+    println!("cargo:rustc-link-lib=static=sundials_ida");
+    println!("cargo:rustc-link-lib=static=sundials_nvecserial");
+    println!("cargo:rustc-link-lib=static=sundials_sunlinsoldense");
+    println!("cargo:rustc-link-lib=static=sundials_sunmatrixdense");
+    println!("cargo:rustc-link-lib=static=sundials_sunlinsolklu");
+    println!("cargo:rustc-link-lib=static=sundials_sunmatrixsparse");
+
+    // We also need SuiteSparse
+    println!("cargo:rustc-link-search=native=/usr/lib/x86_64-linux-gnu");
+    println!("cargo:rustc-link-lib=klu");
+    println!("cargo:rustc-link-lib=amd");
+    println!("cargo:rustc-link-lib=colamd");
+    println!("cargo:rustc-link-lib=btf");
+    println!("cargo:rustc-link-lib=suitesparseconfig");
     
-    let include_paths = match library {
-        Ok(lib) => lib.include_paths,
-        Err(_) => {
-            // Fallback: This is where we would use the `cmake` crate to build Sundials from source
-            // for cross-compiling to iOS, WASM, etc.
-            // For now, we assume it's installed in standard locations.
-            println!("cargo:rustc-link-lib=sundials_cvode");
-            println!("cargo:rustc-link-lib=sundials_ida");
-            println!("cargo:rustc-link-lib=sundials_nvecserial");
-            println!("cargo:rustc-link-lib=sundials_sunlinsoldense");
-            println!("cargo:rustc-link-lib=sundials_sunmatrixdense");
-            println!("cargo:rustc-link-lib=sundials_sunlinsolklu");
-            println!("cargo:rustc-link-lib=sundials_sunmatrixsparse");
-            // SuiteSparse KLU also requires klu and amd
-            println!("cargo:rustc-link-lib=klu");
-            println!("cargo:rustc-link-lib=amd");
-            vec![PathBuf::from("/usr/include"), PathBuf::from("/usr/include/suitesparse")]
-        }
-    };
+    // C math library
+    println!("cargo:rustc-link-lib=m");
 
     // Generate bindings
     let mut builder = bindgen::Builder::default()
         .header("wrapper.h")
+        .clang_arg(format!("-I{}/include", dst.display()))
+        .clang_arg("-I/usr/include/suitesparse")
         .blocklist_item("FP_NAN")
         .blocklist_item("FP_INFINITE")
         .blocklist_item("FP_ZERO")
         .blocklist_item("FP_SUBNORMAL")
         .blocklist_item("FP_NORMAL")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
-
-    for path in include_paths {
-        builder = builder.clang_arg(format!("-I{}", path.display()));
-    }
 
     let bindings = builder
         .generate()
