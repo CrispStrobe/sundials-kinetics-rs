@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "sundials-sys",
+    "sundials",
+    "symengine-sys",
+    "symengine",
+    "chem_core"
+]
