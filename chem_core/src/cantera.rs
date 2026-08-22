@@ -9,7 +9,10 @@
 //! Unsupported features are reported as warnings rather than hard errors,
 //! so that partially-supported mechanism files can still be loaded.
 
-use crate::{Phase, Reaction, ReactionSystem, Species};
+use crate::{
+    Arrhenius, Phase, PressureDependence, RateLaw, Reaction, ReactionSystem, Species,
+    ThirdBodyEfficiency, TroeParams,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -215,12 +218,27 @@ pub fn parse_cantera_yaml(input: &str) -> Result<CanteraMechanism, CanteraError>
     for rxn in &doc.reactions {
         let reaction_type = rxn.reaction_type.as_deref().unwrap_or("elementary");
 
+        let efficiencies = rxn
+            .efficiencies
+            .as_ref()
+            .map(|eff| {
+                eff.iter()
+                    .filter_map(|(name, val)| {
+                        species_map.get(name).map(|idx| ThirdBodyEfficiency {
+                            species_idx: *idx,
+                            efficiency: *val,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
         match reaction_type {
             "elementary" | "" => {
                 if let Some(ref rc) = rxn.rate_constant {
                     match parse_equation(&rxn.equation, &species_map) {
                         Ok((reactants, products)) => {
-                            let mut reaction = Reaction::new(rc.a);
+                            let mut reaction = Reaction::with_arrhenius(rc.a, rc.b, rc.ea);
                             for (idx, coeff) in &reactants {
                                 reaction = reaction.add_reactant(*idx, *coeff);
                             }
@@ -234,12 +252,22 @@ pub fn parse_cantera_yaml(input: &str) -> Result<CanteraMechanism, CanteraError>
                 }
             }
             "three-body" => {
-                // For three-body reactions, use the rate constant directly
-                // (efficiency corrections are a runtime concern)
                 if let Some(ref rc) = rxn.rate_constant {
                     match parse_equation(&rxn.equation, &species_map) {
                         Ok((reactants, products)) => {
-                            let mut reaction = Reaction::new(rc.a);
+                            let arr = Arrhenius::new(rc.a, rc.b, rc.ea);
+                            let pressure = PressureDependence::ThirdBody {
+                                efficiencies: efficiencies.clone(),
+                                default_efficiency: 1.0,
+                            };
+                            let mut reaction = Reaction {
+                                reactants: Vec::new(),
+                                products: Vec::new(),
+                                rate_law: RateLaw::PressureDependent {
+                                    arrhenius: arr,
+                                    pressure,
+                                },
+                            };
                             for (idx, coeff) in &reactants {
                                 reaction = reaction.add_reactant(*idx, *coeff);
                             }
@@ -253,15 +281,46 @@ pub fn parse_cantera_yaml(input: &str) -> Result<CanteraMechanism, CanteraError>
                 }
             }
             "falloff" => {
-                // Use the high-pressure rate constant for falloff reactions
-                let rc = rxn
-                    .high_p_rate
-                    .as_ref()
-                    .or(rxn.rate_constant.as_ref());
-                if let Some(rc) = rc {
+                let high_rc = rxn.high_p_rate.as_ref().or(rxn.rate_constant.as_ref());
+                let low_rc = rxn.low_p_rate.as_ref();
+
+                if let (Some(high), Some(low)) = (high_rc, low_rc) {
                     match parse_equation(&rxn.equation, &species_map) {
                         Ok((reactants, products)) => {
-                            let mut reaction = Reaction::new(rc.a);
+                            let high_arr = Arrhenius::new(high.a, high.b, high.ea);
+                            let low_arr = Arrhenius::new(low.a, low.b, low.ea);
+
+                            let pressure = if let Some(ref troe) = rxn.troe {
+                                PressureDependence::Troe {
+                                    high_pressure: high_arr,
+                                    low_pressure: low_arr,
+                                    troe: TroeParams {
+                                        a: troe.a,
+                                        t3: troe.t3,
+                                        t1: troe.t1,
+                                        t2: troe.t2,
+                                    },
+                                    efficiencies: efficiencies.clone(),
+                                    default_efficiency: 1.0,
+                                }
+                            } else {
+                                PressureDependence::Lindemann {
+                                    high_pressure: high_arr,
+                                    low_pressure: low_arr,
+                                    efficiencies: efficiencies.clone(),
+                                    default_efficiency: 1.0,
+                                }
+                            };
+
+                            // Use high-pressure Arrhenius as the base rate
+                            let mut reaction = Reaction {
+                                reactants: Vec::new(),
+                                products: Vec::new(),
+                                rate_law: RateLaw::PressureDependent {
+                                    arrhenius: Arrhenius::new(1.0, 0.0, 0.0), // unity base; pressure handles it
+                                    pressure,
+                                },
+                            };
                             for (idx, coeff) in &reactants {
                                 reaction = reaction.add_reactant(*idx, *coeff);
                             }
@@ -269,12 +328,24 @@ pub fn parse_cantera_yaml(input: &str) -> Result<CanteraMechanism, CanteraError>
                                 reaction = reaction.add_product(*idx, *coeff);
                             }
                             sys.add_reaction(reaction);
-                            if rxn.troe.is_some() {
-                                warnings.push(format!(
-                                    "falloff {}: Troe parameters parsed but not applied at runtime",
-                                    rxn.equation
-                                ));
+                        }
+                        Err(e) => warnings.push(format!("falloff {}: {}", rxn.equation, e)),
+                    }
+                } else if let Some(rc) = high_rc {
+                    match parse_equation(&rxn.equation, &species_map) {
+                        Ok((reactants, products)) => {
+                            let mut reaction = Reaction::with_arrhenius(rc.a, rc.b, rc.ea);
+                            for (idx, coeff) in &reactants {
+                                reaction = reaction.add_reactant(*idx, *coeff);
                             }
+                            for (idx, coeff) in &products {
+                                reaction = reaction.add_product(*idx, *coeff);
+                            }
+                            sys.add_reaction(reaction);
+                            warnings.push(format!(
+                                "falloff {}: missing low-P rate, using high-P only",
+                                rxn.equation
+                            ));
                         }
                         Err(e) => warnings.push(format!("falloff {}: {}", rxn.equation, e)),
                     }
@@ -497,12 +568,19 @@ reactions:
 
         let mech = parse_cantera_yaml(yaml).unwrap();
         assert_eq!(mech.system.reactions.len(), 1);
-        // Should have a warning about Troe parameters not being applied at runtime
+        // Troe parameters are now applied at runtime — no warning expected
         assert!(
-            mech.warnings.iter().any(|w| w.contains("Troe")),
-            "Expected Troe warning, got: {:?}",
+            mech.warnings.is_empty(),
+            "Unexpected warnings: {:?}",
             mech.warnings
         );
+        // Verify the rate law is pressure-dependent
+        match &mech.system.reactions[0].rate_law {
+            crate::RateLaw::PressureDependent { pressure, .. } => {
+                assert!(matches!(pressure, crate::PressureDependence::Troe { .. }));
+            }
+            other => panic!("Expected PressureDependent, got {:?}", other),
+        }
     }
 
     #[test]

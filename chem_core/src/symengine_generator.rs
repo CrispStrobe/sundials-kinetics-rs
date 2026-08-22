@@ -31,6 +31,24 @@ impl<'a> SymEngineGenerator<'a> {
                     }
                     rate_expr
                 },
+                crate::RateLaw::ArrheniusLaw(arr) => {
+                    // For symbolic purposes, treat Arrhenius as a constant k at
+                    // the system's temperature (temperature is not a symbolic variable)
+                    let k = arr.k(self.sys.temperature);
+                    let mut rate_expr = Expression::real_double(k);
+                    for react in &reaction.reactants {
+                        let conc = &syms[react.species_idx];
+                        let exp = Expression::real_double(react.coefficient);
+                        let term = conc.pow(&exp);
+                        rate_expr = &rate_expr * &term;
+                    }
+                    rate_expr
+                },
+                crate::RateLaw::PressureDependent { .. } => {
+                    // Pressure-dependent rates require runtime concentrations for
+                    // [M]; fall back to numerical Jacobian for these reactions.
+                    Expression::real_double(0.0)
+                },
                 crate::RateLaw::Custom(_) => {
                     unimplemented!("SymEngine AST generation for Custom rate laws via closure is not yet supported. Please use numerical Jacobians or provide an AST builder.");
                 }
