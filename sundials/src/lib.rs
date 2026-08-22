@@ -5,6 +5,7 @@ pub mod sparse;
 pub mod linsol;
 pub mod cvode;
 pub mod ida;
+pub mod kinsol;
 
 pub use context::Context;
 pub use nvector::NVector;

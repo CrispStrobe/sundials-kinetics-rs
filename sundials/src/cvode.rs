@@ -157,7 +157,7 @@ mod tests {
         y.as_mut_slice()[0] = 1.0; // y(0) = 1.0
 
         let mut solver = CvodeSolver::new(Lmm::Adams, &ctx);
-        solver.init(0.0, &y, |t, y_val, ydot| {
+        solver.init(0.0, &y, |_t, y_val, ydot| {
             // dy/dt = -0.5 * y
             ydot[0] = -0.5 * y_val[0];
             Ok(())
@@ -183,5 +183,46 @@ mod tests {
         assert!(steps > 0);
         let rhs_evals = solver.get_num_rhs_evals().unwrap();
         assert!(rhs_evals > 0);
+    }
+    
+    #[test]
+    fn test_robertson_stiff_kinetics() {
+        // The Robertson problem is the classic test for stiff ODE solvers.
+        // y1' = -0.04*y1 + 1e4*y2*y3
+        // y2' = 0.04*y1 - 1e4*y2*y3 - 3e7*y2^2
+        // y3' = 3e7*y2^2
+        let ctx = Context::new();
+        let mut y = NVector::new_serial(3, &ctx);
+        
+        let slice = y.as_mut_slice();
+        slice[0] = 1.0;
+        slice[1] = 0.0;
+        slice[2] = 0.0;
+        
+        let mut solver = CvodeSolver::new(Lmm::Bdf, &ctx);
+        solver.init(0.0, &y, |_t, y, ydot| {
+            ydot[0] = -0.04 * y[0] + 1.0e4 * y[1] * y[2];
+            ydot[2] = 3.0e7 * y[1] * y[1];
+            ydot[1] = -ydot[0] - ydot[2]; // Mass conservation
+            Ok(())
+        });
+        
+        solver.set_ss_tolerances(1e-4, 1e-8);
+        
+        let mat = DenseMatrix::new(3, 3, &ctx);
+        let linsol = DenseLinearSolver::new(&y, &mat, &ctx);
+        solver.set_linear_solver(&linsol, &mat);
+        
+        let mut tret = 0.0;
+        // Integrate to t = 0.4
+        let flag = solver.step(0.4, &mut y, &mut tret);
+        
+        assert_eq!(flag, CV_SUCCESS as i32);
+        
+        let out = y.as_slice();
+        // Analytical/Numerical expectations at t=0.4
+        assert!((out[0] - 0.9851712).abs() < 1e-4, "y1 was {}", out[0]);
+        assert!((out[1] - 0.0000338).abs() < 1e-5, "y2 was {}", out[1]);
+        assert!((out[2] - 0.0147949).abs() < 1e-4, "y3 was {}", out[2]);
     }
 }
