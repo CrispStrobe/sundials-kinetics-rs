@@ -8,4 +8,7 @@ default = ["klu"]
 klu = ["sundials-sys/klu"]
 
 [dependencies]
-sundials-sys = { path = "../sundials-sys" }
+# default-features = false so that disabling this wrapper's `klu` feature
+# actually disables sundials-sys's KLU: without it, sundials-sys's own
+# default `klu` feature stays active no matter what the dependent selects.
+sundials-sys = { path = "../sundials-sys", default-features = false }
