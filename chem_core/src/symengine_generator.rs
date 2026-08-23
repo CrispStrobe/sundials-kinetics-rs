@@ -34,7 +34,7 @@ impl<'a> SymEngineGenerator<'a> {
                 crate::RateLaw::ArrheniusLaw(arr) => {
                     // For symbolic purposes, treat Arrhenius as a constant k at
                     // the system's temperature (temperature is not a symbolic variable)
-                    let k = arr.k(self.sys.temperature);
+                    let k = arr.rate_constant(self.sys.temperature);
                     let mut rate_expr = Expression::real_double(k);
                     for react in &reaction.reactants {
                         let conc = &syms[react.species_idx];

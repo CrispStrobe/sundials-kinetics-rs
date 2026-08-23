@@ -41,17 +41,16 @@ impl KineticEvaluator {
                     rates[i] = r;
                 }
                 crate::RateLaw::ArrheniusLaw(arr) => {
-                    let mut r = arr.k(t);
+                    let mut r = arr.rate_constant(t);
                     for react in &reaction.reactants {
                         r *= c[react.species_idx].max(0.0).powf(react.coefficient);
                     }
                     rates[i] = r;
                 }
-                crate::RateLaw::PressureDependent { arrhenius, pressure } => {
-                    let k_base = arrhenius.k(t);
-                    let k_pressure =
-                        pressure.rate_constant(t, c, self.num_species);
-                    let mut r = k_base * k_pressure;
+                crate::RateLaw::PressureDependent { arrhenius, pressure: _ } => {
+                    // TODO: full falloff (Lindemann/Troe) with third-body concentrations
+                    let k_base = arrhenius.rate_constant(t);
+                    let mut r = k_base;
                     for react in &reaction.reactants {
                         r *= c[react.species_idx].max(0.0).powf(react.coefficient);
                     }
@@ -86,7 +85,7 @@ impl KineticEvaluator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Arrhenius, Phase, Reaction, ReactionSystem, Species};
+    use crate::{ArrheniusParams, Phase, Reaction, RateLaw, ReactionSystem, Species};
 
     #[test]
     fn test_rhs_evaluation() {
@@ -115,18 +114,17 @@ mod tests {
         let a = sys.add_species(Species::new("A", 1.0, 0, Phase::Gas));
         let b = sys.add_species(Species::new("B", 1.0, 0, Phase::Gas));
 
-        sys.add_reaction(
-            Reaction::with_arrhenius(1e13, 0.0, 40000.0)
-                .add_reactant(a, 1.0)
-                .add_product(b, 1.0),
-        );
+        let arr = ArrheniusParams::new(1e13, 0.0, 40000.0);
+        let mut rxn = Reaction { reactants: Vec::new(), products: Vec::new(), rate_law: RateLaw::ArrheniusLaw(arr) };
+        rxn = rxn.add_reactant(a, 1.0).add_product(b, 1.0);
+        sys.add_reaction(rxn);
 
         let eval = KineticEvaluator::new(sys);
         let c = vec![1.0, 0.0];
         let mut ydot = vec![0.0, 0.0];
         eval.evaluate_rhs(&c, &mut ydot);
 
-        let expected_k = Arrhenius::new(1e13, 0.0, 40000.0).k(1000.0);
+        let expected_k = ArrheniusParams::new(1e13, 0.0, 40000.0).rate_constant(1000.0);
         assert!(
             (ydot[0] + expected_k).abs() < expected_k * 1e-10,
             "ydot[0] = {}, expected -k = {}",

@@ -76,6 +76,91 @@ impl Expression {
         }
         result
     }
+
+    /// Substitute a single symbol with another expression: self[old → new].
+    pub fn subs2(&self, old: &Expression, new: &Expression) -> Self {
+        let mut result = Self::new();
+        unsafe {
+            basic_subs2(result.inner, self.inner, old.inner, new.inner);
+        }
+        result
+    }
+
+    /// Substitute all symbols in the map: self[k₁→v₁, k₂→v₂, ...].
+    pub fn subs(&self, map: &SubstitutionMap) -> Self {
+        let mut result = Self::new();
+        unsafe {
+            basic_subs(result.inner, self.inner, map.inner);
+        }
+        result
+    }
+
+    /// Evaluate to a floating-point number (53-bit double precision).
+    /// Returns None if the expression still contains free symbols.
+    pub fn eval_double(&self) -> Option<f64> {
+        let mut result = Self::new();
+        unsafe {
+            let status = basic_evalf(result.inner, self.inner, 53, 0);
+            if status != 0 {
+                return None;
+            }
+            let val = real_double_get_d(result.inner);
+            if val.is_nan() {
+                return None;
+            }
+            Some(val)
+        }
+    }
+
+    /// Check if the expression is numerically zero.
+    pub fn is_zero(&self) -> bool {
+        unsafe { number_is_zero(self.inner) != 0 }
+    }
+
+    /// Raw pointer access for FFI.
+    pub fn as_raw(&self) -> *mut basic_struct {
+        self.inner
+    }
+}
+
+/// A map from symbols to expressions for bulk substitution.
+pub struct SubstitutionMap {
+    inner: *mut CMapBasicBasic,
+}
+
+impl SubstitutionMap {
+    pub fn new() -> Self {
+        unsafe {
+            Self {
+                inner: mapbasicbasic_new(),
+            }
+        }
+    }
+
+    /// Insert a symbol → value mapping.
+    pub fn insert(&mut self, key: &Expression, value: &Expression) {
+        unsafe {
+            mapbasicbasic_insert(self.inner, key.inner, value.inner);
+        }
+    }
+
+    /// Build a substitution map from symbol names and f64 values.
+    pub fn from_values(symbols: &[Expression], values: &[f64]) -> Self {
+        let mut map = Self::new();
+        for (sym, &val) in symbols.iter().zip(values) {
+            let val_expr = Expression::real_double(val);
+            map.insert(sym, &val_expr);
+        }
+        map
+    }
+}
+
+impl Drop for SubstitutionMap {
+    fn drop(&mut self) {
+        unsafe {
+            mapbasicbasic_free(self.inner);
+        }
+    }
 }
 
 impl Drop for Expression {

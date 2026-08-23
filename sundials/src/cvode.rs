@@ -33,6 +33,8 @@ struct UserData<F, G> {
     psolve: Option<
         Box<dyn FnMut(f64, &[f64], &[f64], &[f64], &mut [f64], f64, f64, i32) -> Result<(), ()>>,
     >,
+    // Analytical Jacobian closure (dense, column-major)
+    jac_fn: Option<Box<dyn FnMut(f64, &[f64], &[f64], &mut [f64]) -> Result<(), ()>>>,
 }
 
 pub struct CvodeSolver<'a, F, G> {
@@ -203,6 +205,46 @@ where
     }
 }
 
+/// Trampoline for user-supplied dense Jacobian callback.
+/// Called by SUNDIALS at each Newton iteration with the CVLsJacFn signature.
+extern "C" fn jac_trampoline<F, G>(
+    t: sunrealtype,
+    y: N_Vector,
+    fy: N_Vector,
+    jac: sundials_sys::SUNMatrix,
+    user_data: *mut c_void,
+    _tmp1: N_Vector,
+    _tmp2: N_Vector,
+    _tmp3: N_Vector,
+) -> i32
+where
+    F: FnMut(f64, &[f64], &mut [f64]) -> Result<(), ()>,
+{
+    let ud = unsafe { &mut *(user_data as *mut UserData<F, G>) };
+    if let Some(ref mut jac_fn) = ud.jac_fn {
+        let len = unsafe { sundials_sys::N_VGetLength_Serial(y) } as usize;
+        let y_slice =
+            unsafe { std::slice::from_raw_parts(sundials_sys::N_VGetArrayPointer_Serial(y), len) };
+        let fy_slice =
+            unsafe { std::slice::from_raw_parts(sundials_sys::N_VGetArrayPointer_Serial(fy), len) };
+
+        // Get the dense matrix data pointer (column-major, len*len)
+        let jac_data = unsafe {
+            let content = sundials_sys::SUNDenseMatrix_Data(jac);
+            std::slice::from_raw_parts_mut(content, len * len)
+        };
+
+        let result = catch_unwind(AssertUnwindSafe(|| jac_fn(t, y_slice, fy_slice, jac_data)));
+        match result {
+            Ok(Ok(())) => 0,
+            Ok(Err(())) => 1,
+            Err(_) => -1,
+        }
+    } else {
+        -1
+    }
+}
+
 impl<'a> CvodeBuilder<'a> {
     pub fn new(lmm: Lmm, ctx: &'a Context) -> Self {
         let inner = unsafe { CVodeCreate(lmm as i32, ctx.as_raw()) };
@@ -221,6 +263,7 @@ impl<'a> CvodeBuilder<'a> {
             sens_rhs: None,
             psetup: None,
             psolve: None,
+            jac_fn: None,
         });
         let user_data = Box::into_raw(ud) as *mut c_void;
         let inner = self.inner;
@@ -271,6 +314,7 @@ impl<'a, F, G> CvodeSolver<'a, F, G> {
             sens_rhs,
             psetup: old_ud.psetup,
             psolve: old_ud.psolve,
+            jac_fn: old_ud.jac_fn,
         });
         let user_data_ptr = Box::into_raw(new_ud) as *mut c_void;
 
@@ -414,6 +458,32 @@ impl<'a, F, G> CvodeSolver<'a, F, G> {
                 Some(psolve_trampoline::<F, G>),
             );
             assert_eq!(flag, CV_SUCCESS as i32, "CVodeSetPreconditioner failed");
+        }
+    }
+
+    /// Set an analytical dense Jacobian function.
+    ///
+    /// The closure receives `(t, y, fy, jac_data)` where `jac_data` is a
+    /// column-major dense matrix (len × len). It should fill J[j][k] at
+    /// index `j + k * len` = ∂f_j/∂y_k.
+    ///
+    /// When set, CVODE uses this instead of finite-difference Jacobian
+    /// approximation — critical for stiff systems where FD Jacobians are
+    /// expensive or inaccurate.
+    pub fn set_dense_jacobian(
+        &mut self,
+        jac: impl FnMut(f64, &[f64], &[f64], &mut [f64]) -> Result<(), ()> + 'static,
+    ) where
+        F: FnMut(f64, &[f64], &mut [f64]) -> Result<(), ()>,
+    {
+        let ud = unsafe { &mut *(self.user_data as *mut UserData<F, G>) };
+        ud.jac_fn = Some(Box::new(jac));
+        unsafe {
+            let flag = sundials_sys::CVodeSetJacFn(
+                self.inner,
+                Some(jac_trampoline::<F, G>),
+            );
+            assert_eq!(flag, CV_SUCCESS as i32, "CVodeSetJacFn failed");
         }
     }
 
