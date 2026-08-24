@@ -3,6 +3,15 @@ use std::path::PathBuf;
 
 use cmake::Config;
 
+fn has_tool(name: &str) -> bool {
+    std::process::Command::new(name)
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok()
+}
+
 fn main() {
     let target = env::var("TARGET").unwrap();
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
@@ -77,6 +86,14 @@ fn main() {
             .define("AMD_LIBRARY_DIR", &amd_lib);
     } else {
         cmake.define("ENABLE_KLU", "OFF");
+    }
+
+    if has_tool("ninja") {
+        cmake.generator("Ninja");
+    }
+    if has_tool("ccache") {
+        cmake.define("CMAKE_C_COMPILER_LAUNCHER", "ccache");
+        cmake.define("CMAKE_CXX_COMPILER_LAUNCHER", "ccache");
     }
 
     let dst = cmake.build();
